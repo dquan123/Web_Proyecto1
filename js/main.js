@@ -1,6 +1,6 @@
 //Punto de entrada de la aplicación
 
-import { getPosts } from './api.js';
+import { getPosts, getPostById, getUserById } from './api.js';
 
 // Referencia al contenedor principal
 const app = document.querySelector('#app');
@@ -8,6 +8,7 @@ const app = document.querySelector('#app');
 // Estado de la aplicación
 let state = {
     posts: [],
+    currentPost: null,
     currentPage: 0,
     postsPerPage: 10,
     totalPosts: 0,
@@ -92,6 +93,9 @@ const renderPosts = (posts) => {
     
     // Agregar event listeners a los botones de paginación
     setupPaginationListeners();
+    
+    // Agregar event listeners a los botones de detalle
+    setupDetailListeners();
 };
 
 // Configurar listeners de paginación
@@ -117,6 +121,73 @@ const setupPaginationListeners = () => {
             }
         });
     }
+};
+
+// Configurar listeners de botones "Ver detalle"
+const setupDetailListeners = () => {
+    const detailButtons = document.querySelectorAll('.btn-detail');
+    
+    detailButtons.forEach(button => {
+        button.addEventListener('click', (e) => {
+            const postId = e.target.dataset.id;
+            loadPostDetail(postId);
+        });
+    });
+};
+
+// Cargar detalle de un post
+const loadPostDetail = async (id) => {
+    try {
+        showLoading();
+        
+        // Obtener post y usuario en paralelo
+        const post = await getPostById(id);
+        const user = await getUserById(post.userId);
+        
+        state.currentPost = post;
+        
+        renderPostDetail(post, user);
+        
+    } catch (error) {
+        showError(error.message);
+    }
+};
+
+// Renderizar vista de detalle
+const renderPostDetail = (post, user) => {
+    app.innerHTML = `
+        <article class="post-detail">
+            <button class="btn-back" id="btn-back">← Volver al listado</button>
+            
+            <h1 class="post-detail-title">${post.title}</h1>
+            
+            <div class="post-detail-meta">
+                <span class="post-author">👤 ${user.firstName} ${user.lastName}</span>
+                <span class="post-views">👁️ ${post.views} vistas</span>
+            </div>
+            
+            <div class="post-detail-body">
+                <p>${post.body}</p>
+            </div>
+            
+            <div class="post-detail-tags">
+                🏷️ Tags: ${post.tags.map(tag => `<span class="tag">${tag}</span>`).join(' ')}
+            </div>
+            
+            <div class="post-detail-reactions">
+                <span class="reaction">👍 ${post.reactions.likes} likes</span>
+                <span class="reaction">👎 ${post.reactions.dislikes} dislikes</span>
+            </div>
+            
+            <div class="post-detail-actions">
+                <button class="btn-edit" data-id="${post.id}">✏️ Editar</button>
+                <button class="btn-delete" data-id="${post.id}">🗑️ Eliminar</button>
+            </div>
+        </article>
+    `;
+    
+    // Listener para volver al listado
+    document.querySelector('#btn-back').addEventListener('click', loadPosts);
 };
 
 // Función principal para cargar posts
