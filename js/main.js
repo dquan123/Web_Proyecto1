@@ -1,4 +1,4 @@
-// Punto de entrada de la aplicación
+//Punto de entrada de la aplicación
 
 import { getPosts } from './api.js';
 
@@ -34,9 +34,32 @@ const showError = (message) => {
     `;
 };
 
+// Función para renderizar controles de paginación
+const renderPagination = () => {
+    const totalPages = Math.ceil(state.totalPosts / state.postsPerPage);
+    const currentPageDisplay = state.currentPage + 1;
+    
+    const prevDisabled = state.currentPage === 0;
+    const nextDisabled = state.currentPage >= totalPages - 1;
+    
+    return `
+        <div class="pagination">
+            <button class="btn-pagination" id="btn-prev" ${prevDisabled ? 'disabled' : ''}>
+                ← Anterior
+            </button>
+            <span class="pagination-info">
+                Página ${currentPageDisplay} de ${totalPages}
+            </span>
+            <button class="btn-pagination" id="btn-next" ${nextDisabled ? 'disabled' : ''}>
+                Siguiente →
+            </button>
+        </div>
+    `;
+};
+
 // Función para renderizar la lista de posts
 const renderPosts = (posts) => {
-    if (posts.length == 0) {
+    if (posts.length === 0) {
         app.innerHTML = `
             <div class="empty">
                 <p>No se encontraron posts.</p>
@@ -63,8 +86,37 @@ const renderPosts = (posts) => {
             <div class="posts-grid">
                 ${postsHTML}
             </div>
+            ${renderPagination()}
         </section>
     `;
+    
+    // Agregar event listeners a los botones de paginación
+    setupPaginationListeners();
+};
+
+// Configurar listeners de paginación
+const setupPaginationListeners = () => {
+    const btnPrev = document.querySelector('#btn-prev');
+    const btnNext = document.querySelector('#btn-next');
+    
+    if (btnPrev) {
+        btnPrev.addEventListener('click', () => {
+            if (state.currentPage > 0) {
+                state.currentPage--;
+                loadPosts();
+            }
+        });
+    }
+    
+    if (btnNext) {
+        btnNext.addEventListener('click', () => {
+            const totalPages = Math.ceil(state.totalPosts / state.postsPerPage);
+            if (state.currentPage < totalPages - 1) {
+                state.currentPage++;
+                loadPosts();
+            }
+        });
+    }
 };
 
 // Función principal para cargar posts
