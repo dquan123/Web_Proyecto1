@@ -1,15 +1,18 @@
 //Punto de entrada de la aplicación
 
-import { getPosts, getPostById, getUserById, createPost } from './api.js';
+import { getPosts, getPostById, getUserById, createPost, updatePost } from './api.js';
 import { validatePostForm, showFormErrors, clearAllErrors } from './validation.js';
 
 // Referencia al contenedor principal
 const app = document.querySelector('#app');
 
+// -------------------------------------------
 // Estado de la aplicación
+// -------------------------------------------
 let state = {
     posts: [],
     currentPost: null,
+    currentUser: null,
     currentView: 'home',
     currentPage: 0,
     postsPerPage: 10,
@@ -18,7 +21,9 @@ let state = {
     error: null
 };
 
+// -------------------------------------------
 // Función para mostrar estado de carga
+// -------------------------------------------
 const showLoading = () => {
     app.innerHTML = `
         <div class="loading">
@@ -27,7 +32,9 @@ const showLoading = () => {
     `;
 };
 
+// -------------------------------------------
 // Función para mostrar errores
+// -------------------------------------------
 const showError = (message) => {
     app.innerHTML = `
         <div class="error">
@@ -37,22 +44,23 @@ const showError = (message) => {
     `;
 };
 
+// -------------------------------------------
 // Función para mostrar mensaje de éxito
+// -------------------------------------------
 const showSuccess = (message) => {
-
-    // Crear elemento de toast
     const toast = document.createElement('div');
     toast.className = 'toast toast-success';
     toast.innerHTML = `<p>${message}</p>`;
     document.body.appendChild(toast);
     
-    // Remover después de 3 segundos
     setTimeout(() => {
         toast.remove();
     }, 3000);
 };
 
+// -------------------------------------------
 // Función para renderizar controles de paginación
+// -------------------------------------------
 const renderPagination = () => {
     const totalPages = Math.ceil(state.totalPosts / state.postsPerPage);
     const currentPageDisplay = state.currentPage + 1;
@@ -75,7 +83,9 @@ const renderPagination = () => {
     `;
 };
 
+// -------------------------------------------
 // Función para renderizar la lista de posts
+// -------------------------------------------
 const renderPosts = (posts) => {
     if (posts.length === 0) {
         app.innerHTML = `
@@ -108,14 +118,13 @@ const renderPosts = (posts) => {
         </section>
     `;
     
-    // Agregar event listeners a los botones de paginación
     setupPaginationListeners();
-    
-    // Agregar event listeners a los botones de detalle
     setupDetailListeners();
 };
 
+// -------------------------------------------
 // Configurar listeners de paginación
+// -------------------------------------------
 const setupPaginationListeners = () => {
     const btnPrev = document.querySelector('#btn-prev');
     const btnNext = document.querySelector('#btn-next');
@@ -140,7 +149,9 @@ const setupPaginationListeners = () => {
     }
 };
 
+// -------------------------------------------
 // Configurar listeners de botones "Ver detalle"
+// -------------------------------------------
 const setupDetailListeners = () => {
     const detailButtons = document.querySelectorAll('.btn-detail');
     
@@ -152,16 +163,18 @@ const setupDetailListeners = () => {
     });
 };
 
+// -------------------------------------------
 // Cargar detalle de un post
+// -------------------------------------------
 const loadPostDetail = async (id) => {
     try {
         showLoading();
         
-        // Obtener post y usuario en paralelo
         const post = await getPostById(id);
         const user = await getUserById(post.userId);
         
         state.currentPost = post;
+        state.currentUser = user;
         state.currentView = 'detail';
         updateActiveNav();
         
@@ -172,7 +185,9 @@ const loadPostDetail = async (id) => {
     }
 };
 
+// -------------------------------------------
 // Renderizar vista de detalle
+// -------------------------------------------
 const renderPostDetail = (post, user) => {
     app.innerHTML = `
         <article class="post-detail">
@@ -211,9 +226,16 @@ const renderPostDetail = (post, user) => {
         updateActiveNav();
         loadPosts();
     });
+    
+    // Listener para editar
+    document.querySelector('.btn-edit').addEventListener('click', () => {
+        renderEditForm(post, user);
+    });
 };
 
+// -------------------------------------------
 // Renderizar formulario de crear post
+// -------------------------------------------
 const renderCreateForm = () => {
     state.currentView = 'create';
     updateActiveNav();
@@ -277,16 +299,160 @@ const renderCreateForm = () => {
     setupCreateFormListeners();
 };
 
+// -------------------------------------------
 // Configurar listeners del formulario de crear
+// -------------------------------------------
 const setupCreateFormListeners = () => {
     const form = document.querySelector('#create-form');
     const btnCancel = document.querySelector('#btn-cancel');
     
-    // Cancelar - volver al listado
     btnCancel.addEventListener('click', () => {
         state.currentView = 'home';
         updateActiveNav();
         loadPosts();
+    });
+    
+    form.addEventListener('submit', async (e) => {
+        e.preventDefault();
+        
+        const title = document.querySelector('#title').value;
+        const body = document.querySelector('#body').value;
+        const author = document.querySelector('#author').value;
+        const tagsInput = document.querySelector('#tags').value;
+        
+        const validation = validatePostForm(title, body, author);
+        
+        if (!validation.valid) {
+            showFormErrors(validation.errors);
+            return;
+        }
+        
+        clearAllErrors();
+        
+        const tags = tagsInput 
+            ? tagsInput.split(',').map(tag => tag.trim()).filter(tag => tag !== '')
+            : ['general'];
+        
+        const postData = {
+            title: title.trim(),
+            body: body.trim(),
+            userId: 1,
+            tags: tags,
+            reactions: {
+                likes: 0,
+                dislikes: 0
+            }
+        };
+        
+        try {
+            const submitBtn = form.querySelector('.btn-submit');
+            submitBtn.disabled = true;
+            submitBtn.textContent = 'Creando...';
+            
+            const newPost = await createPost(postData);
+            
+            showSuccess('¡Publicación creada exitosamente!');
+            
+            form.reset();
+            
+            setTimeout(() => {
+                state.currentView = 'home';
+                updateActiveNav();
+                loadPosts();
+            }, 1000);
+            
+        } catch (error) {
+            showError('Error al crear la publicación: ' + error.message);
+            
+            const submitBtn = form.querySelector('.btn-submit');
+            submitBtn.disabled = false;
+            submitBtn.textContent = 'Crear Publicación';
+        }
+    });
+    
+    setupFormValidationListeners(form);
+};
+
+// -------------------------------------------
+// Renderizar formulario de editar post
+// -------------------------------------------
+const renderEditForm = (post, user) => {
+    state.currentView = 'edit';
+    updateActiveNav();
+    
+    app.innerHTML = `
+        <section class="form-container">
+            <h2>Editar Publicación</h2>
+            
+            <form id="edit-form" class="post-form" novalidate>
+                <div class="form-group">
+                    <label for="title">Título *</label>
+                    <input 
+                        type="text" 
+                        id="title" 
+                        name="title" 
+                        value="${post.title}"
+                        placeholder="Escribe el título del post (mínimo 5 caracteres)"
+                    >
+                    <span class="error-message" id="title-error"></span>
+                </div>
+                
+                <div class="form-group">
+                    <label for="body">Contenido *</label>
+                    <textarea 
+                        id="body" 
+                        name="body" 
+                        rows="6" 
+                        placeholder="Escribe el contenido del post (mínimo 20 caracteres)"
+                    >${post.body}</textarea>
+                    <span class="error-message" id="body-error"></span>
+                </div>
+                
+                <div class="form-group">
+                    <label for="author">Nombre del Autor</label>
+                    <input 
+                        type="text" 
+                        id="author" 
+                        name="author" 
+                        value="${user.firstName} ${user.lastName}"
+                        readonly
+                        class="field-readonly"
+                    >
+                    <span class="field-hint">El autor no se puede modificar</span>
+                </div>
+                
+                <div class="form-group">
+                    <label for="tags">Tags (separados por coma)</label>
+                    <input 
+                        type="text" 
+                        id="tags" 
+                        name="tags" 
+                        value="${post.tags.join(', ')}"
+                        placeholder="tecnología, programación, web"
+                    >
+                </div>
+                
+                <div class="form-actions">
+                    <button type="button" class="btn-cancel" id="btn-cancel">Cancelar</button>
+                    <button type="submit" class="btn-submit">Guardar Cambios</button>
+                </div>
+            </form>
+        </section>
+    `;
+    
+    setupEditFormListeners(post.id);
+};
+
+// -------------------------------------------
+// Configurar listeners del formulario de editar
+// -------------------------------------------
+const setupEditFormListeners = (postId) => {
+    const form = document.querySelector('#edit-form');
+    const btnCancel = document.querySelector('#btn-cancel');
+    
+    // Cancelar - volver al detalle
+    btnCancel.addEventListener('click', () => {
+        loadPostDetail(postId);
     });
     
     // Enviar formulario
@@ -298,7 +464,6 @@ const setupCreateFormListeners = () => {
         const author = document.querySelector('#author').value;
         const tagsInput = document.querySelector('#tags').value;
         
-        // Validar formulario
         const validation = validatePostForm(title, body, author);
         
         if (!validation.valid) {
@@ -306,10 +471,8 @@ const setupCreateFormListeners = () => {
             return;
         }
         
-        // Limpiar errores previos
         clearAllErrors();
         
-        // Preparar datos del post
         const tags = tagsInput 
             ? tagsInput.split(',').map(tag => tag.trim()).filter(tag => tag !== '')
             : ['general'];
@@ -317,47 +480,42 @@ const setupCreateFormListeners = () => {
         const postData = {
             title: title.trim(),
             body: body.trim(),
-            userId: 1, // Usuario por defecto (la API lo requiere)
-            tags: tags,
-            reactions: {
-                likes: 0,
-                dislikes: 0
-            }
+            tags: tags
         };
         
         try {
-            // Deshabilitar botón mientras se envía
             const submitBtn = form.querySelector('.btn-submit');
             submitBtn.disabled = true;
-            submitBtn.textContent = 'Creando...';
+            submitBtn.textContent = 'Guardando...';
             
-            // Enviar a la API
-            const newPost = await createPost(postData);
+            const updatedPost = await updatePost(postId, postData);
             
-            // Mostrar mensaje de éxito
-            showSuccess('¡Publicación creada exitosamente!');
+            showSuccess('¡Publicación actualizada exitosamente!');
             
-            // Limpiar formulario
-            form.reset();
+            // Actualizar el post en el estado con los nuevos datos
+            state.currentPost = { ...state.currentPost, ...updatedPost };
             
-            // Volver al listado después de 1 segundo
+            // Volver al detalle después de 1 segundo
             setTimeout(() => {
-                state.currentView = 'home';
-                updateActiveNav();
-                loadPosts();
+                renderPostDetail(state.currentPost, state.currentUser);
             }, 1000);
             
         } catch (error) {
-            showError('Error al crear la publicación: ' + error.message);
+            showError('Error al actualizar la publicación: ' + error.message);
             
-            // Rehabilitar botón
             const submitBtn = form.querySelector('.btn-submit');
             submitBtn.disabled = false;
-            submitBtn.textContent = 'Crear Publicación';
+            submitBtn.textContent = 'Guardar Cambios';
         }
     });
     
-    // Validación en tiempo real (limpiar error cuando el usuario escribe)
+    setupFormValidationListeners(form);
+};
+
+// -------------------------------------------
+// Configurar validación en tiempo real para formularios
+// -------------------------------------------
+const setupFormValidationListeners = (form) => {
     const inputs = form.querySelectorAll('input, textarea');
     inputs.forEach(input => {
         input.addEventListener('input', () => {
@@ -371,7 +529,9 @@ const setupCreateFormListeners = () => {
     });
 };
 
+// -------------------------------------------
 // Actualizar navegación activa
+// -------------------------------------------
 const updateActiveNav = () => {
     const navLinks = document.querySelectorAll('.nav-link');
     navLinks.forEach(link => {
@@ -382,7 +542,9 @@ const updateActiveNav = () => {
     });
 };
 
+// -------------------------------------------
 // Configurar navegación
+// -------------------------------------------
 const setupNavigation = () => {
     const navLinks = document.querySelectorAll('.nav-link');
     
@@ -403,7 +565,9 @@ const setupNavigation = () => {
     });
 };
 
+// -------------------------------------------
 // Función principal para cargar posts
+// -------------------------------------------
 const loadPosts = async () => {
     try {
         showLoading();
@@ -422,7 +586,9 @@ const loadPosts = async () => {
     }
 };
 
+// -------------------------------------------
 // Inicializar la aplicación
+// -------------------------------------------
 const init = () => {
     setupNavigation();
     loadPosts();
