@@ -1,6 +1,7 @@
 //Punto de entrada de la aplicación
 
-import { getPosts, getPostById, getUserById } from './api.js';
+import { getPosts, getPostById, getUserById, createPost } from './api.js';
+import { validatePostForm, showFormErrors, clearAllErrors } from './validation.js';
 
 // Referencia al contenedor principal
 const app = document.querySelector('#app');
@@ -9,6 +10,7 @@ const app = document.querySelector('#app');
 let state = {
     posts: [],
     currentPost: null,
+    currentView: 'home',
     currentPage: 0,
     postsPerPage: 10,
     totalPosts: 0,
@@ -20,7 +22,7 @@ let state = {
 const showLoading = () => {
     app.innerHTML = `
         <div class="loading">
-            <p>Cargando posts...</p>
+            <p>Cargando...</p>
         </div>
     `;
 };
@@ -33,6 +35,21 @@ const showError = (message) => {
             <button onclick="location.reload()">Reintentar</button>
         </div>
     `;
+};
+
+// Función para mostrar mensaje de éxito
+const showSuccess = (message) => {
+
+    // Crear elemento de toast
+    const toast = document.createElement('div');
+    toast.className = 'toast toast-success';
+    toast.innerHTML = `<p>${message}</p>`;
+    document.body.appendChild(toast);
+    
+    // Remover después de 3 segundos
+    setTimeout(() => {
+        toast.remove();
+    }, 3000);
 };
 
 // Función para renderizar controles de paginación
@@ -145,6 +162,8 @@ const loadPostDetail = async (id) => {
         const user = await getUserById(post.userId);
         
         state.currentPost = post;
+        state.currentView = 'detail';
+        updateActiveNav();
         
         renderPostDetail(post, user);
         
@@ -187,7 +206,201 @@ const renderPostDetail = (post, user) => {
     `;
     
     // Listener para volver al listado
-    document.querySelector('#btn-back').addEventListener('click', loadPosts);
+    document.querySelector('#btn-back').addEventListener('click', () => {
+        state.currentView = 'home';
+        updateActiveNav();
+        loadPosts();
+    });
+};
+
+// Renderizar formulario de crear post
+const renderCreateForm = () => {
+    state.currentView = 'create';
+    updateActiveNav();
+    
+    app.innerHTML = `
+        <section class="form-container">
+            <h2>Crear Nueva Publicación</h2>
+            
+            <form id="create-form" class="post-form" novalidate>
+                <div class="form-group">
+                    <label for="title">Título *</label>
+                    <input 
+                        type="text" 
+                        id="title" 
+                        name="title" 
+                        placeholder="Escribe el título del post (mínimo 5 caracteres)"
+                    >
+                    <span class="error-message" id="title-error"></span>
+                </div>
+                
+                <div class="form-group">
+                    <label for="body">Contenido *</label>
+                    <textarea 
+                        id="body" 
+                        name="body" 
+                        rows="6" 
+                        placeholder="Escribe el contenido del post (mínimo 20 caracteres)"
+                    ></textarea>
+                    <span class="error-message" id="body-error"></span>
+                </div>
+                
+                <div class="form-group">
+                    <label for="author">Nombre del Autor *</label>
+                    <input 
+                        type="text" 
+                        id="author" 
+                        name="author" 
+                        placeholder="Tu nombre"
+                    >
+                    <span class="error-message" id="author-error"></span>
+                </div>
+                
+                <div class="form-group">
+                    <label for="tags">Tags (separados por coma)</label>
+                    <input 
+                        type="text" 
+                        id="tags" 
+                        name="tags" 
+                        placeholder="tecnología, programación, web"
+                    >
+                </div>
+                
+                <div class="form-actions">
+                    <button type="button" class="btn-cancel" id="btn-cancel">Cancelar</button>
+                    <button type="submit" class="btn-submit">Crear Publicación</button>
+                </div>
+            </form>
+        </section>
+    `;
+    
+    setupCreateFormListeners();
+};
+
+// Configurar listeners del formulario de crear
+const setupCreateFormListeners = () => {
+    const form = document.querySelector('#create-form');
+    const btnCancel = document.querySelector('#btn-cancel');
+    
+    // Cancelar - volver al listado
+    btnCancel.addEventListener('click', () => {
+        state.currentView = 'home';
+        updateActiveNav();
+        loadPosts();
+    });
+    
+    // Enviar formulario
+    form.addEventListener('submit', async (e) => {
+        e.preventDefault();
+        
+        const title = document.querySelector('#title').value;
+        const body = document.querySelector('#body').value;
+        const author = document.querySelector('#author').value;
+        const tagsInput = document.querySelector('#tags').value;
+        
+        // Validar formulario
+        const validation = validatePostForm(title, body, author);
+        
+        if (!validation.valid) {
+            showFormErrors(validation.errors);
+            return;
+        }
+        
+        // Limpiar errores previos
+        clearAllErrors();
+        
+        // Preparar datos del post
+        const tags = tagsInput 
+            ? tagsInput.split(',').map(tag => tag.trim()).filter(tag => tag !== '')
+            : ['general'];
+        
+        const postData = {
+            title: title.trim(),
+            body: body.trim(),
+            userId: 1, // Usuario por defecto (la API lo requiere)
+            tags: tags,
+            reactions: {
+                likes: 0,
+                dislikes: 0
+            }
+        };
+        
+        try {
+            // Deshabilitar botón mientras se envía
+            const submitBtn = form.querySelector('.btn-submit');
+            submitBtn.disabled = true;
+            submitBtn.textContent = 'Creando...';
+            
+            // Enviar a la API
+            const newPost = await createPost(postData);
+            
+            // Mostrar mensaje de éxito
+            showSuccess('¡Publicación creada exitosamente!');
+            
+            // Limpiar formulario
+            form.reset();
+            
+            // Volver al listado después de 1 segundo
+            setTimeout(() => {
+                state.currentView = 'home';
+                updateActiveNav();
+                loadPosts();
+            }, 1000);
+            
+        } catch (error) {
+            showError('Error al crear la publicación: ' + error.message);
+            
+            // Rehabilitar botón
+            const submitBtn = form.querySelector('.btn-submit');
+            submitBtn.disabled = false;
+            submitBtn.textContent = 'Crear Publicación';
+        }
+    });
+    
+    // Validación en tiempo real (limpiar error cuando el usuario escribe)
+    const inputs = form.querySelectorAll('input, textarea');
+    inputs.forEach(input => {
+        input.addEventListener('input', () => {
+            const errorSpan = document.querySelector(`#${input.id}-error`);
+            if (errorSpan) {
+                errorSpan.textContent = '';
+                errorSpan.style.display = 'none';
+            }
+            input.classList.remove('field-error');
+        });
+    });
+};
+
+// Actualizar navegación activa
+const updateActiveNav = () => {
+    const navLinks = document.querySelectorAll('.nav-link');
+    navLinks.forEach(link => {
+        link.classList.remove('active');
+        if (link.dataset.view === state.currentView) {
+            link.classList.add('active');
+        }
+    });
+};
+
+// Configurar navegación
+const setupNavigation = () => {
+    const navLinks = document.querySelectorAll('.nav-link');
+    
+    navLinks.forEach(link => {
+        link.addEventListener('click', (e) => {
+            e.preventDefault();
+            const view = e.target.dataset.view;
+            
+            if (view === 'home') {
+                state.currentView = 'home';
+                state.currentPage = 0;
+                updateActiveNav();
+                loadPosts();
+            } else if (view === 'create') {
+                renderCreateForm();
+            }
+        });
+    });
 };
 
 // Función principal para cargar posts
@@ -200,6 +413,7 @@ const loadPosts = async () => {
         
         state.posts = data.posts;
         state.totalPosts = data.total;
+        state.currentView = 'home';
         
         renderPosts(state.posts);
         
@@ -210,6 +424,7 @@ const loadPosts = async () => {
 
 // Inicializar la aplicación
 const init = () => {
+    setupNavigation();
     loadPosts();
 };
 
