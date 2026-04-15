@@ -1,6 +1,8 @@
-//Punto de entrada de la aplicación
+// ===========================================
+// MAIN.JS - Punto de entrada de la aplicación
+// ===========================================
 
-import { getPosts, getPostById, getUserById, createPost, updatePost, deletePost } from './api.js';
+import { getPosts, getPostById, getUserById, createPost, updatePost, deletePost, searchPosts, getPostsByTag, getAllTags } from './api.js';
 import { validatePostForm, showFormErrors, clearAllErrors } from './validation.js';
 
 // Referencia al contenedor principal
@@ -11,6 +13,7 @@ const app = document.querySelector('#app');
 // -------------------------------------------
 let state = {
     posts: [],
+    allTags: [],
     currentPost: null,
     currentUser: null,
     currentView: 'home',
@@ -18,7 +21,12 @@ let state = {
     postsPerPage: 10,
     totalPosts: 0,
     loading: false,
-    error: null
+    error: null,
+    filters: {
+        search: '',
+        tag: '',
+        userId: ''
+    }
 };
 
 // -------------------------------------------
@@ -38,7 +46,7 @@ const showLoading = () => {
 const showError = (message) => {
     app.innerHTML = `
         <div class="error">
-            <p>Error ${message}</p>
+            <p>Error, ${message}</p>
             <button onclick="location.reload()">Reintentar</button>
         </div>
     `;
@@ -84,15 +92,61 @@ const renderPagination = () => {
 };
 
 // -------------------------------------------
+// Renderizar barra de filtros
+// -------------------------------------------
+const renderFilters = () => {
+    const tagsOptions = state.allTags.map(tag => 
+        `<option value="${tag.slug}" ${state.filters.tag === tag.slug ? 'selected' : ''}>${tag.name}</option>`
+    ).join('');
+    
+    return `
+        <div class="filters-container">
+            <div class="filter-group">
+                <input 
+                    type="text" 
+                    id="filter-search" 
+                    placeholder="Buscar por título o contenido..."
+                    value="${state.filters.search}"
+                >
+            </div>
+            <div class="filter-group">
+                <select id="filter-tag">
+                    <option value="">Todos los tags</option>
+                    ${tagsOptions}
+                </select>
+            </div>
+            <div class="filter-group">
+                <input 
+                    type="number" 
+                    id="filter-user" 
+                    placeholder="ID de usuario"
+                    value="${state.filters.userId}"
+                    min="1"
+                >
+            </div>
+            <button class="btn-filter" id="btn-apply-filters">Filtrar</button>
+            <button class="btn-clear-filters" id="btn-clear-filters">Limpiar</button>
+        </div>
+    `;
+};
+
+// -------------------------------------------
 // Función para renderizar la lista de posts
 // -------------------------------------------
 const renderPosts = (posts) => {
+    const filtersHTML = renderFilters();
+    
     if (posts.length === 0) {
         app.innerHTML = `
-            <div class="empty">
-                <p>No se encontraron posts.</p>
-            </div>
+            <section class="posts-container">
+                <h2>Publicaciones</h2>
+                ${filtersHTML}
+                <div class="empty">
+                    <p>No se encontraron posts.</p>
+                </div>
+            </section>
         `;
+        setupFilterListeners();
         return;
     }
 
@@ -111,6 +165,7 @@ const renderPosts = (posts) => {
     app.innerHTML = `
         <section class="posts-container">
             <h2>Publicaciones</h2>
+            ${filtersHTML}
             <div class="posts-grid">
                 ${postsHTML}
             </div>
@@ -120,6 +175,98 @@ const renderPosts = (posts) => {
     
     setupPaginationListeners();
     setupDetailListeners();
+    setupFilterListeners();
+};
+
+// -------------------------------------------
+// Configurar listeners de filtros
+// -------------------------------------------
+const setupFilterListeners = () => {
+    const btnApply = document.querySelector('#btn-apply-filters');
+    const btnClear = document.querySelector('#btn-clear-filters');
+    const searchInput = document.querySelector('#filter-search');
+    
+    if (btnApply) {
+        btnApply.addEventListener('click', applyFilters);
+    }
+    
+    if (btnClear) {
+        btnClear.addEventListener('click', clearFilters);
+    }
+    
+    // Búsqueda con Enter
+    if (searchInput) {
+        searchInput.addEventListener('keypress', (e) => {
+            if (e.key === 'Enter') {
+                applyFilters();
+            }
+        });
+    }
+};
+
+// -------------------------------------------
+// Aplicar filtros
+// -------------------------------------------
+const applyFilters = async () => {
+    const search = document.querySelector('#filter-search').value.trim();
+    const tag = document.querySelector('#filter-tag').value;
+    const userId = document.querySelector('#filter-user').value.trim();
+    
+    state.filters = { search, tag, userId };
+    state.currentPage = 0;
+    
+    try {
+        showLoading();
+        
+        let data;
+        
+        // Prioridad de filtros: búsqueda > tag > usuario > todos
+        if (search) {
+            data = await searchPosts(search);
+            state.posts = data.posts;
+            state.totalPosts = data.total;
+        } else if (tag) {
+            data = await getPostsByTag(tag);
+            state.posts = data.posts;
+            state.totalPosts = data.total;
+        } else if (userId) {
+            // Filtrar por usuario desde los posts cargados
+            const allData = await getPosts(100, 0);
+            state.posts = allData.posts.filter(post => post.userId === parseInt(userId));
+            state.totalPosts = state.posts.length;
+        } else {
+            await loadPosts();
+            return;
+        }
+        
+        // Aplicar filtros combinados localmente si hay más de uno
+        if (search && tag) {
+            state.posts = state.posts.filter(post => post.tags.includes(tag));
+            state.totalPosts = state.posts.length;
+        }
+        if (search && userId) {
+            state.posts = state.posts.filter(post => post.userId === parseInt(userId));
+            state.totalPosts = state.posts.length;
+        }
+        if (tag && userId) {
+            state.posts = state.posts.filter(post => post.userId === parseInt(userId));
+            state.totalPosts = state.posts.length;
+        }
+        
+        renderPosts(state.posts);
+        
+    } catch (error) {
+        showError(error.message);
+    }
+};
+
+// -------------------------------------------
+// Limpiar filtros
+// -------------------------------------------
+const clearFilters = () => {
+    state.filters = { search: '', tag: '', userId: '' };
+    state.currentPage = 0;
+    loadPosts();
 };
 
 // -------------------------------------------
@@ -220,22 +367,75 @@ const renderPostDetail = (post, user) => {
         </article>
     `;
     
-    // Listener para volver al listado
     document.querySelector('#btn-back').addEventListener('click', () => {
         state.currentView = 'home';
         updateActiveNav();
         loadPosts();
     });
     
-    // Listener para editar
     document.querySelector('.btn-edit').addEventListener('click', () => {
         renderEditForm(post, user);
     });
-
-    // Listener para eliminar
+    
     document.querySelector('.btn-delete').addEventListener('click', () => {
         showDeleteConfirm(post.id);
     });
+};
+
+// -------------------------------------------
+// Mostrar confirmación de eliminar
+// -------------------------------------------
+const showDeleteConfirm = (postId) => {
+    const overlay = document.createElement('div');
+    overlay.className = 'modal-overlay';
+    overlay.innerHTML = `
+        <div class="modal">
+            <h3>¿Eliminar publicación?</h3>
+            <p>Esta acción no se puede deshacer.</p>
+            <div class="modal-actions">
+                <button class="btn-cancel" id="btn-cancel-delete">Cancelar</button>
+                <button class="btn-delete" id="btn-confirm-delete">Eliminar</button>
+            </div>
+        </div>
+    `;
+    document.body.appendChild(overlay);
+    
+    document.querySelector('#btn-cancel-delete').addEventListener('click', () => {
+        overlay.remove();
+    });
+    
+    document.querySelector('#btn-confirm-delete').addEventListener('click', async () => {
+        await executeDelete(postId, overlay);
+    });
+};
+
+// -------------------------------------------
+// Ejecutar eliminación
+// -------------------------------------------
+const executeDelete = async (postId, overlay) => {
+    try {
+        const btnConfirm = document.querySelector('#btn-confirm-delete');
+        btnConfirm.disabled = true;
+        btnConfirm.textContent = 'Eliminando...';
+        
+        await deletePost(postId);
+        
+        overlay.remove();
+        
+        state.posts = state.posts.filter(post => post.id !== parseInt(postId));
+        
+        showSuccess('¡Publicación eliminada exitosamente!');
+        
+        setTimeout(() => {
+            state.currentView = 'home';
+            updateActiveNav();
+            renderPosts(state.posts);
+        }, 1000);
+        
+    } catch (error) {
+        overlay.remove();
+        showError('Error al eliminar: ' + error.message);
+    }
 };
 
 // -------------------------------------------
@@ -449,88 +649,25 @@ const renderEditForm = (post, user) => {
 };
 
 // -------------------------------------------
-// Mostrar confirmación de eliminar
-// -------------------------------------------
-const showDeleteConfirm = (postId) => {
-    // Crear overlay de confirmación
-    const overlay = document.createElement('div');
-    overlay.className = 'modal-overlay';
-    overlay.innerHTML = `
-        <div class="modal">
-            <h3>¿Eliminar publicación?</h3>
-            <p>Esta acción no se puede deshacer.</p>
-            <div class="modal-actions">
-                <button class="btn-cancel" id="btn-cancel-delete">Cancelar</button>
-                <button class="btn-delete" id="btn-confirm-delete">Eliminar</button>
-            </div>
-        </div>
-    `;
-    document.body.appendChild(overlay);
-    
-    // Listener cancelar
-    document.querySelector('#btn-cancel-delete').addEventListener('click', () => {
-        overlay.remove();
-    });
-    
-    // Listener confirmar
-    document.querySelector('#btn-confirm-delete').addEventListener('click', async () => {
-        await executeDelete(postId, overlay);
-    });
-};
-
-// -------------------------------------------
-// Ejecutar eliminación
-// -------------------------------------------
-const executeDelete = async (postId, overlay) => {
-    try {
-        const btnConfirm = document.querySelector('#btn-confirm-delete');
-        btnConfirm.disabled = true;
-        btnConfirm.textContent = 'Eliminando...';
-        
-        await deletePost(postId);
-        
-        overlay.remove();
-        
-        // Remover el post del estado local
-        state.posts = state.posts.filter(post => post.id !== parseInt(postId));
-        
-        showSuccess('¡Publicación eliminada exitosamente!');
-        
-        // Volver al listado mostrando los posts actualizados (sin el eliminado)
-        setTimeout(() => {
-            state.currentView = 'home';
-            updateActiveNav();
-            renderPosts(state.posts);
-        }, 1000);
-        
-    } catch (error) {
-        overlay.remove();
-        showError('Error al eliminar: ' + error.message);
-    }
-};
-
-// -------------------------------------------
 // Configurar listeners del formulario de editar
 // -------------------------------------------
 const setupEditFormListeners = (postId) => {
     const form = document.querySelector('#edit-form');
     const btnCancel = document.querySelector('#btn-cancel');
     
-    // Cancelar - volver al detalle
     btnCancel.addEventListener('click', () => {
         loadPostDetail(postId);
     });
     
-    // Enviar formulario
     form.addEventListener('submit', async (e) => {
         e.preventDefault();
         
         const title = document.querySelector('#title').value;
         const body = document.querySelector('#body').value;
-        const author = document.querySelector('#author').value;
         const tagsInput = document.querySelector('#tags').value;
         
-        const validation = validatePostForm(title, body, author);
+        // Solo validar título y body (autor es readonly)
+        const validation = validatePostForm(title, body, 'readonly');
         
         if (!validation.valid) {
             showFormErrors(validation.errors);
@@ -558,10 +695,8 @@ const setupEditFormListeners = (postId) => {
             
             showSuccess('¡Publicación actualizada exitosamente!');
             
-            // Actualizar el post en el estado con los nuevos datos
             state.currentPost = { ...state.currentPost, ...updatedPost };
             
-            // Volver al detalle después de 1 segundo
             setTimeout(() => {
                 renderPostDetail(state.currentPost, state.currentUser);
             }, 1000);
@@ -582,7 +717,7 @@ const setupEditFormListeners = (postId) => {
 // Configurar validación en tiempo real para formularios
 // -------------------------------------------
 const setupFormValidationListeners = (form) => {
-    const inputs = form.querySelectorAll('input, textarea');
+    const inputs = form.querySelectorAll('input:not([readonly]), textarea');
     inputs.forEach(input => {
         input.addEventListener('input', () => {
             const errorSpan = document.querySelector(`#${input.id}-error`);
@@ -593,6 +728,118 @@ const setupFormValidationListeners = (form) => {
             input.classList.remove('field-error');
         });
     });
+};
+
+// -------------------------------------------
+// Renderizar vista de estadísticas
+// -------------------------------------------
+const renderStats = async () => {
+    state.currentView = 'stats';
+    updateActiveNav();
+    
+    showLoading();
+    
+    try {
+        // Cargar todos los posts para calcular estadísticas
+        const data = await getPosts(100, 0);
+        const posts = data.posts;
+        
+        // Calcular estadísticas
+        const totalPosts = data.total;
+        const totalLikes = posts.reduce((sum, post) => sum + post.reactions.likes, 0);
+        const totalDislikes = posts.reduce((sum, post) => sum + post.reactions.dislikes, 0);
+        const totalViews = posts.reduce((sum, post) => sum + post.views, 0);
+        const avgLikes = (totalLikes / posts.length).toFixed(1);
+        const avgViews = (totalViews / posts.length).toFixed(0);
+        
+        // Contar tags
+        const tagCount = {};
+        posts.forEach(post => {
+            post.tags.forEach(tag => {
+                tagCount[tag] = (tagCount[tag] || 0) + 1;
+            });
+        });
+        
+        // Top 5 tags
+        const topTags = Object.entries(tagCount)
+            .sort((a, b) => b[1] - a[1])
+            .slice(0, 5);
+        
+        // Top 5 posts con más likes
+        const topPosts = [...posts]
+            .sort((a, b) => b.reactions.likes - a.reactions.likes)
+            .slice(0, 5);
+        
+        app.innerHTML = `
+            <section class="stats-container">
+                <h2>📊 Estadísticas del Blog</h2>
+                
+                <div class="stats-grid">
+                    <div class="stat-card">
+                        <span class="stat-icon">📝</span>
+                        <span class="stat-value">${totalPosts}</span>
+                        <span class="stat-label">Total de Posts</span>
+                    </div>
+                    <div class="stat-card">
+                        <span class="stat-icon">👍</span>
+                        <span class="stat-value">${totalLikes}</span>
+                        <span class="stat-label">Total de Likes</span>
+                    </div>
+                    <div class="stat-card">
+                        <span class="stat-icon">👎</span>
+                        <span class="stat-value">${totalDislikes}</span>
+                        <span class="stat-label">Total de Dislikes</span>
+                    </div>
+                    <div class="stat-card">
+                        <span class="stat-icon">👁️</span>
+                        <span class="stat-value">${totalViews}</span>
+                        <span class="stat-label">Total de Vistas</span>
+                    </div>
+                    <div class="stat-card">
+                        <span class="stat-icon">⭐</span>
+                        <span class="stat-value">${avgLikes}</span>
+                        <span class="stat-label">Promedio de Likes</span>
+                    </div>
+                    <div class="stat-card">
+                        <span class="stat-icon">📈</span>
+                        <span class="stat-value">${avgViews}</span>
+                        <span class="stat-label">Promedio de Vistas</span>
+                    </div>
+                </div>
+                
+                <div class="stats-details">
+                    <div class="stats-section">
+                        <h3>🏷️ Tags más usados</h3>
+                        <ul class="top-list">
+                            ${topTags.map(([tag, count], index) => `
+                                <li>
+                                    <span class="rank">#${index + 1}</span>
+                                    <span class="name">${tag}</span>
+                                    <span class="count">${count} posts</span>
+                                </li>
+                            `).join('')}
+                        </ul>
+                    </div>
+                    
+                    <div class="stats-section">
+                        <h3>Posts más populares</h3>
+                        <ul class="top-list">
+                            ${topPosts.map((post, index) => `
+                                <li>
+                                    <span class="rank">#${index + 1}</span>
+                                    <span class="name">${post.title.substring(0, 40)}...</span>
+                                    <span class="count">👍 ${post.reactions.likes}</span>
+                                </li>
+                            `).join('')}
+                        </ul>
+                    </div>
+                </div>
+            </section>
+        `;
+        
+    } catch (error) {
+        showError(error.message);
+    }
 };
 
 // -------------------------------------------
@@ -622,10 +869,11 @@ const setupNavigation = () => {
             if (view === 'home') {
                 state.currentView = 'home';
                 state.currentPage = 0;
-                updateActiveNav();
-                loadPosts();
+                clearFilters();
             } else if (view === 'create') {
                 renderCreateForm();
+            } else if (view === 'stats') {
+                renderStats();
             }
         });
     });
@@ -653,10 +901,23 @@ const loadPosts = async () => {
 };
 
 // -------------------------------------------
+// Cargar tags disponibles
+// -------------------------------------------
+const loadTags = async () => {
+    try {
+        state.allTags = await getAllTags();
+    } catch (error) {
+        console.error('Error cargando tags:', error);
+        state.allTags = [];
+    }
+};
+
+// -------------------------------------------
 // Inicializar la aplicación
 // -------------------------------------------
-const init = () => {
+const init = async () => {
     setupNavigation();
+    await loadTags();
     loadPosts();
 };
 
