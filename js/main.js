@@ -1,6 +1,6 @@
 //Punto de entrada de la aplicación
 
-import { getPosts, getPostById, getUserById, createPost, updatePost } from './api.js';
+import { getPosts, getPostById, getUserById, createPost, updatePost, deletePost } from './api.js';
 import { validatePostForm, showFormErrors, clearAllErrors } from './validation.js';
 
 // Referencia al contenedor principal
@@ -231,6 +231,11 @@ const renderPostDetail = (post, user) => {
     document.querySelector('.btn-edit').addEventListener('click', () => {
         renderEditForm(post, user);
     });
+
+    // Listener para eliminar
+    document.querySelector('.btn-delete').addEventListener('click', () => {
+        showDeleteConfirm(post.id);
+    });
 };
 
 // -------------------------------------------
@@ -441,6 +446,67 @@ const renderEditForm = (post, user) => {
     `;
     
     setupEditFormListeners(post.id);
+};
+
+// -------------------------------------------
+// Mostrar confirmación de eliminar
+// -------------------------------------------
+const showDeleteConfirm = (postId) => {
+    // Crear overlay de confirmación
+    const overlay = document.createElement('div');
+    overlay.className = 'modal-overlay';
+    overlay.innerHTML = `
+        <div class="modal">
+            <h3>¿Eliminar publicación?</h3>
+            <p>Esta acción no se puede deshacer.</p>
+            <div class="modal-actions">
+                <button class="btn-cancel" id="btn-cancel-delete">Cancelar</button>
+                <button class="btn-delete" id="btn-confirm-delete">Eliminar</button>
+            </div>
+        </div>
+    `;
+    document.body.appendChild(overlay);
+    
+    // Listener cancelar
+    document.querySelector('#btn-cancel-delete').addEventListener('click', () => {
+        overlay.remove();
+    });
+    
+    // Listener confirmar
+    document.querySelector('#btn-confirm-delete').addEventListener('click', async () => {
+        await executeDelete(postId, overlay);
+    });
+};
+
+// -------------------------------------------
+// Ejecutar eliminación
+// -------------------------------------------
+const executeDelete = async (postId, overlay) => {
+    try {
+        const btnConfirm = document.querySelector('#btn-confirm-delete');
+        btnConfirm.disabled = true;
+        btnConfirm.textContent = 'Eliminando...';
+        
+        await deletePost(postId);
+        
+        overlay.remove();
+        
+        // Remover el post del estado local
+        state.posts = state.posts.filter(post => post.id !== parseInt(postId));
+        
+        showSuccess('¡Publicación eliminada exitosamente!');
+        
+        // Volver al listado mostrando los posts actualizados (sin el eliminado)
+        setTimeout(() => {
+            state.currentView = 'home';
+            updateActiveNav();
+            renderPosts(state.posts);
+        }, 1000);
+        
+    } catch (error) {
+        overlay.remove();
+        showError('Error al eliminar: ' + error.message);
+    }
 };
 
 // -------------------------------------------
