@@ -142,8 +142,8 @@ La aplicación es responsive y se adapta a:
  
 | Nombre | Rol |
 |--------|-----|
-| Diego | Repositorio, API, Router, Estados, README, Deploy |
-| Quique | UI, Formularios, Validaciones, CSS, Filtros, Estadísticas |
+| Diego Quan| Repositorio, API, Router, Estados, README, Deploy |
+| Enrique Bran | UI, Formularios, Validaciones, CSS, Filtros, Estadísticas |
  
 ## Screenshots
  
@@ -161,7 +161,7 @@ La aplicación es responsive y se adapta a:
   
 ## Demo en Producción
  
-[Ver aplicación desplegada](#)
+[http://chicharronconpelos.shop/24336/PROYECTO_CRUD/](http://chicharronconpelos.shop/24336/PROYECTO_CRUD/)
  
 ---
  
