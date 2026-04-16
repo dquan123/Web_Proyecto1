@@ -165,4 +165,4 @@ La aplicación es responsive y se adapta a:
  
 ---
  
-**Proyecto CRUD** - Sistemas y Tecnologías Web - UVG 2025
+**Proyecto CRUD** - Sistemas y Tecnologías Web - UVG 2026
