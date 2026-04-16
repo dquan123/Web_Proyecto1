@@ -34,7 +34,7 @@ const renderPosts = (posts) => {
     const filtersHTML = renderFilters(state.allTags, state.filters);
     const postsHTML = renderPostsList(posts);
     const paginationHTML = renderPagination(state.currentPage, state.totalPosts, state.postsPerPage);
-    
+
     if (posts.length === 0) {
         app.innerHTML = `
             <section class="posts-container">
@@ -57,7 +57,7 @@ const renderPosts = (posts) => {
             </section>
         `;
     }
-    
+
     setupPaginationListeners();
     setupDetailListeners();
     setupFilterListeners();
@@ -70,15 +70,15 @@ const setupFilterListeners = () => {
     const btnApply = document.querySelector('#btn-apply-filters');
     const btnClear = document.querySelector('#btn-clear-filters');
     const searchInput = document.querySelector('#filter-search');
-    
+
     if (btnApply) {
         btnApply.addEventListener('click', applyFilters);
     }
-    
+
     if (btnClear) {
         btnClear.addEventListener('click', clearFilters);
     }
-    
+
     if (searchInput) {
         searchInput.addEventListener('keypress', (e) => {
             if (e.key === 'Enter') {
@@ -95,15 +95,15 @@ const applyFilters = async () => {
     const search = document.querySelector('#filter-search').value.trim();
     const tag = document.querySelector('#filter-tag').value;
     const userId = document.querySelector('#filter-user').value.trim();
-    
+
     state.filters = { search, tag, userId };
     state.currentPage = 0;
-    
+
     try {
         showLoading();
-        
+
         let data;
-        
+
         if (search) {
             data = await searchPosts(search);
             state.posts = data.posts;
@@ -120,7 +120,7 @@ const applyFilters = async () => {
             await loadPosts();
             return;
         }
-        
+
         if (search && tag) {
             state.posts = state.posts.filter(post => post.tags.includes(tag));
             state.totalPosts = state.posts.length;
@@ -133,9 +133,9 @@ const applyFilters = async () => {
             state.posts = state.posts.filter(post => post.userId === parseInt(userId));
             state.totalPosts = state.posts.length;
         }
-        
+
         renderPosts(state.posts);
-        
+
     } catch (error) {
         showError(error.message);
     }
@@ -156,7 +156,7 @@ const clearFilters = () => {
 const setupPaginationListeners = () => {
     const btnPrev = document.querySelector('#btn-prev');
     const btnNext = document.querySelector('#btn-next');
-    
+
     if (btnPrev) {
         btnPrev.addEventListener('click', () => {
             if (state.currentPage > 0) {
@@ -165,7 +165,7 @@ const setupPaginationListeners = () => {
             }
         });
     }
-    
+
     if (btnNext) {
         btnNext.addEventListener('click', () => {
             const totalPages = Math.ceil(state.totalPosts / state.postsPerPage);
@@ -182,7 +182,7 @@ const setupPaginationListeners = () => {
 // -------------------------------------------
 const setupDetailListeners = () => {
     const detailButtons = document.querySelectorAll('.btn-detail');
-    
+
     detailButtons.forEach(button => {
         button.addEventListener('click', (e) => {
             const postId = e.target.dataset.id;
@@ -197,17 +197,17 @@ const setupDetailListeners = () => {
 const loadPostDetail = async (id) => {
     try {
         showLoading();
-        
+
         const post = await getPostById(id);
         const user = await getUserById(post.userId);
-        
+
         state.currentPost = post;
         state.currentUser = user;
         state.currentView = 'detail';
         updateActiveNav();
-        
+
         renderPostDetail(post, user);
-        
+
     } catch (error) {
         showError(error.message);
     }
@@ -218,17 +218,17 @@ const loadPostDetail = async (id) => {
 // -------------------------------------------
 const renderPostDetail = (post, user) => {
     app.innerHTML = renderPostDetailHTML(post, user);
-    
+
     document.querySelector('#btn-back').addEventListener('click', () => {
         state.currentView = 'home';
         updateActiveNav();
         loadPosts();
     });
-    
+
     document.querySelector('.btn-edit').addEventListener('click', () => {
         renderEditForm(post, user);
     });
-    
+
     document.querySelector('.btn-delete').addEventListener('click', () => {
         showDeleteConfirm(post.id);
     });
@@ -242,11 +242,11 @@ const showDeleteConfirm = (postId) => {
     overlay.className = 'modal-overlay';
     overlay.innerHTML = renderDeleteModal();
     document.body.appendChild(overlay);
-    
+
     document.querySelector('#btn-cancel-delete').addEventListener('click', () => {
         overlay.remove();
     });
-    
+
     document.querySelector('#btn-confirm-delete').addEventListener('click', async () => {
         await executeDelete(postId, overlay);
     });
@@ -260,21 +260,21 @@ const executeDelete = async (postId, overlay) => {
         const btnConfirm = document.querySelector('#btn-confirm-delete');
         btnConfirm.disabled = true;
         btnConfirm.textContent = 'Eliminando...';
-        
+
         await deletePost(postId);
-        
+
         overlay.remove();
-        
+
         state.posts = state.posts.filter(post => post.id !== parseInt(postId));
-        
+
         showSuccess('¡Publicación eliminada exitosamente!');
-        
+
         setTimeout(() => {
             state.currentView = 'home';
             updateActiveNav();
             renderPosts(state.posts);
         }, 1000);
-        
+
     } catch (error) {
         overlay.remove();
         showError('Error al eliminar: ' + error.message);
@@ -287,9 +287,9 @@ const executeDelete = async (postId, overlay) => {
 const renderCreateForm = () => {
     state.currentView = 'create';
     updateActiveNav();
-    
+
     app.innerHTML = renderCreateFormHTML();
-    
+
     setupCreateFormListeners();
 };
 
@@ -299,34 +299,34 @@ const renderCreateForm = () => {
 const setupCreateFormListeners = () => {
     const form = document.querySelector('#create-form');
     const btnCancel = document.querySelector('#btn-cancel');
-    
+
     btnCancel.addEventListener('click', () => {
         state.currentView = 'home';
         updateActiveNav();
         loadPosts();
     });
-    
+
     form.addEventListener('submit', async (e) => {
         e.preventDefault();
-        
+
         const title = document.querySelector('#title').value;
         const body = document.querySelector('#body').value;
         const author = document.querySelector('#author').value;
         const tagsInput = document.querySelector('#tags').value;
-        
+
         const validation = validatePostForm(title, body, author);
-        
+
         if (!validation.valid) {
             showFormErrors(validation.errors);
             return;
         }
-        
+
         clearAllErrors();
-        
-        const tags = tagsInput 
+
+        const tags = tagsInput
             ? tagsInput.split(',').map(tag => tag.trim()).filter(tag => tag !== '')
             : ['general'];
-        
+
         const postData = {
             title: title.trim(),
             body: body.trim(),
@@ -334,33 +334,33 @@ const setupCreateFormListeners = () => {
             tags: tags,
             reactions: { likes: 0, dislikes: 0 }
         };
-        
+
         try {
             const submitBtn = form.querySelector('.btn-submit');
             submitBtn.disabled = true;
             submitBtn.textContent = 'Creando...';
-            
+
             await createPost(postData);
-            
+
             showSuccess('¡Publicación creada exitosamente!');
-            
+
             form.reset();
-            
+
             setTimeout(() => {
                 state.currentView = 'home';
                 updateActiveNav();
                 loadPosts();
             }, 1000);
-            
+
         } catch (error) {
             showError('Error al crear la publicación: ' + error.message);
-            
+
             const submitBtn = form.querySelector('.btn-submit');
             submitBtn.disabled = false;
             submitBtn.textContent = 'Crear Publicación';
         }
     });
-    
+
     setupFormValidationListeners(form);
 };
 
@@ -370,9 +370,9 @@ const setupCreateFormListeners = () => {
 const renderEditForm = (post, user) => {
     state.currentView = 'edit';
     updateActiveNav();
-    
+
     app.innerHTML = renderEditFormHTML(post, user);
-    
+
     setupEditFormListeners(post.id);
 };
 
@@ -382,61 +382,61 @@ const renderEditForm = (post, user) => {
 const setupEditFormListeners = (postId) => {
     const form = document.querySelector('#edit-form');
     const btnCancel = document.querySelector('#btn-cancel');
-    
+
     btnCancel.addEventListener('click', () => {
         loadPostDetail(postId);
     });
-    
+
     form.addEventListener('submit', async (e) => {
         e.preventDefault();
-        
+
         const title = document.querySelector('#title').value;
         const body = document.querySelector('#body').value;
         const tagsInput = document.querySelector('#tags').value;
-        
+
         const validation = validatePostForm(title, body, 'readonly');
-        
+
         if (!validation.valid) {
             showFormErrors(validation.errors);
             return;
         }
-        
+
         clearAllErrors();
-        
-        const tags = tagsInput 
+
+        const tags = tagsInput
             ? tagsInput.split(',').map(tag => tag.trim()).filter(tag => tag !== '')
             : ['general'];
-        
+
         const postData = {
             title: title.trim(),
             body: body.trim(),
             tags: tags
         };
-        
+
         try {
             const submitBtn = form.querySelector('.btn-submit');
             submitBtn.disabled = true;
             submitBtn.textContent = 'Guardando...';
-            
+
             const updatedPost = await updatePost(postId, postData);
-            
+
             showSuccess('¡Publicación actualizada exitosamente!');
-            
+
             state.currentPost = { ...state.currentPost, ...updatedPost };
-            
+
             setTimeout(() => {
                 renderPostDetail(state.currentPost, state.currentUser);
             }, 1000);
-            
+
         } catch (error) {
             showError('Error al actualizar la publicación: ' + error.message);
-            
+
             const submitBtn = form.querySelector('.btn-submit');
             submitBtn.disabled = false;
             submitBtn.textContent = 'Guardar Cambios';
         }
     });
-    
+
     setupFormValidationListeners(form);
 };
 
@@ -463,39 +463,39 @@ const setupFormValidationListeners = (form) => {
 const renderStats = async () => {
     state.currentView = 'stats';
     updateActiveNav();
-    
+
     showLoading();
-    
+
     try {
         const data = await getPosts(100, 0);
         const posts = data.posts;
-        
+
         const totalPosts = data.total;
         const totalLikes = posts.reduce((sum, post) => sum + post.reactions.likes, 0);
         const totalDislikes = posts.reduce((sum, post) => sum + post.reactions.dislikes, 0);
         const totalViews = posts.reduce((sum, post) => sum + post.views, 0);
         const avgLikes = (totalLikes / posts.length).toFixed(1);
         const avgViews = (totalViews / posts.length).toFixed(0);
-        
+
         const tagCount = {};
         posts.forEach(post => {
             post.tags.forEach(tag => {
                 tagCount[tag] = (tagCount[tag] || 0) + 1;
             });
         });
-        
+
         const topTags = Object.entries(tagCount)
             .sort((a, b) => b[1] - a[1])
             .slice(0, 5);
-        
+
         const topPosts = [...posts]
             .sort((a, b) => b.reactions.likes - a.reactions.likes)
             .slice(0, 5);
-        
+
         const stats = { totalPosts, totalLikes, totalDislikes, totalViews, avgLikes, avgViews, topTags, topPosts };
-        
+
         app.innerHTML = renderStatsHTML(stats);
-        
+
     } catch (error) {
         showError(error.message);
     }
@@ -507,16 +507,16 @@ const renderStats = async () => {
 const loadPosts = async () => {
     try {
         showLoading();
-        
+
         const skip = state.currentPage * state.postsPerPage;
         const data = await getPosts(state.postsPerPage, skip);
-        
+
         state.posts = data.posts;
         state.totalPosts = data.total;
         state.currentView = 'home';
-        
+
         renderPosts(state.posts);
-        
+
     } catch (error) {
         showError(error.message);
     }
@@ -546,7 +546,7 @@ const init = async () => {
         create: () => renderCreateForm(),
         stats: () => renderStats()
     });
-    
+
     await loadTags();
     loadPosts();
 };
