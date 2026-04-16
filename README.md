@@ -44,7 +44,7 @@ Endpoints utilizados:
  
 1. Clonar el repositorio:
 ```bash
-git clone https://github.com/[usuario]/[repositorio].git
+git clone https://github.com/dquan123/Web_Proyecto1.git
 ```
  
 2. Abrir la carpeta del proyecto en VS Code
